@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Chat Assistant</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+
+        .container {
+            display: flex;
+            gap: 20px;
+            height: calc(100vh - 80px);
+        }
+
+        .left-panel {
+            flex: 1;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .right-panel {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+
+        .upload-section {
+            margin-bottom: 30px;
+        }
+
+        .file-input {
+            width: 0.1px;
+            height: 0.1px;
+            opacity: 0;
+            overflow: hidden;
+            position: absolute;
+            z-index: -1;
+        }
+
+        .file-label {
+            display: inline-block;
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-weight: 600;
+            transition: background-color 0.3s;
+        }
+
+        .file-label:hover {
+            background-color: #45a049;
+        }
+
+        .upload-btn {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 10px 0;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+
+        .upload-btn:hover {
+            background-color: #0b7dda;
+        }
+
+        .upload-status {
+            margin-top: 10px;
+            color: #555;
+        }
+
+        .document-list {
+            flex-grow: 1;
+            overflow-y: auto;
+            border-top: 1px solid #eee;
+            padding-top: 20px;
+        }
+
+        .document-item {
+            background-color: #f1f1f1;
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .document-item:hover {
+            background-color: #e0e0e0;
+        }
+
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .chat-messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 12px 15px;
+            border-radius: 6px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        .user-message {
+            background-color: #DCF8C6;
+            align-self: flex-end;
+            margin-left: auto;
+        }
+
+        .assistant-message {
+            background-color: #E9EAF6;
+            align-self: flex-start;
+        }
+
+        .message-form {
+            display: flex;
+            padding: 15px;
+            background-color: white;
+            border-top: 1px solid #eee;
+            border-radius: 0 0 8px 8px;
+        }
+
+        .message-input {
+            flex-grow: 1;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 12px 15px;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+
+        .send-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            text-align: center;
+            text-decoration: none;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+
+        .send-btn:hover {
+            background-color: #45a049;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 10px;
+            color: #666;
+        }
+
+        /* For better mobile experience */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+                height: auto;
+            }
+            
+            .left-panel, .right-panel {
+                flex: none;
+                width: 100%;
+                margin-bottom: 20px;
+            }
+            
+            .message {
+                max-width: 90%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Document Chat Assistant</h1>
+    
+    <div class="container">
+        <!-- Document Upload Panel -->
+        <div class="left-panel">
+            <div class="upload-section">
+                <h2>Upload Documents</h2>
+                <form id="upload-form" enctype="multipart/form-data">
+                    <input type="file" id="file-input" class="file-input" accept=".pdf,.docx,.txt">
+                    <label for="file-input" class="file-label">Choose File</label>
+                    <span id="file-name">No file chosen</span>
+                    <button type="submit" class="upload-btn">Upload</button>
+                </form>
+                <div id="upload-status" class="upload-status"></div>
+            </div>
+            
+            <h3>Uploaded Documents</h3>
+            <div id="document-list" class="document-list">
+                <!-- Document list will be populated here -->
+                <p id="no-documents">No documents uploaded yet.</p>
+            </div>
+        </div>
+        
+        <!-- Chat Panel -->
+        <div class="right-panel">
+            <div class="chat-container">
+                <div id="chat-messages" class="chat-messages">
+                    <!-- Chat messages will be displayed here -->
+                    <div class="message assistant-message">
+                        Welcome! Upload a document to get started. Once uploaded, you can:
+                        <ul>
+                            <li>Ask questions about the document</li>
+                            <li>Request a summary with "summarize" or "explain"</li>
+                            <li>Type "quiz me" to get a question about the content</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div id="loading" class="loading">
+                    Thinking...
+                </div>
+                
+                <form id="message-form" class="message-form">
+                    <input type="text" id="message-input" class="message-input" placeholder="Type your message here..." disabled>
+                    <button type="submit" id="send-btn" class="send-btn" disabled>Send</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize variables
+            let sessionId = null;
+            let currentDocument = null;
+            const uploadedDocs = {};
+            
+            // Connect to WebSocket
+            const socket = io();
+            
+            // Cache DOM elements
+            const fileInput = document.getElementById('file-input');
+            const fileName = document.getElementById('file-name');
+            const uploadForm = document.getElementById('upload-form');
+            const uploadStatus = document.getElementById('upload-status');
+            const documentList = document.getElementById('document-list');
+            const noDocuments = document.getElementById('no-documents');
+            const chatMessages = document.getElementById('chat-messages');
+            const messageForm = document.getElementById('message-form');
+            const messageInput = document.getElementById('message-input');
+            const sendBtn = document.getElementById('send-btn');
+            const loadingIndicator = document.getElementById('loading');
+            
+            // File input handler
+            fileInput.addEventListener('change', function() {
+                if (this.files.length > 0) {
+                    fileName.textContent = this.files[0].name;
+                } else {
+                    fileName.textContent = 'No file chosen';
+                }
+            });
+            
+            // Upload form handler
+            uploadForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                if (fileInput.files.length === 0) {
+                    uploadStatus.textContent = 'Please select a file first.';
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+                
+                // If we have a session ID, include it
+                if (sessionId) {
+                    formData.append('session_id', sessionId);
+                }
+                
+                // Show loading
+                uploadStatus.textContent = 'Uploading...';
+                
+                // Send file to server
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        uploadStatus.textContent = `Error: ${data.error}`;
+                    } else {
+                        // Store session ID from response
+                        sessionId = data.session_id;
+                        
+                        // Update upload status
+                        uploadStatus.textContent = 'Upload successful!';
+                        
+                        // Add document to list
+                        addDocumentToList(data.filename, data.session_id);
+                        
+                        // Store document info
+                        uploadedDocs[data.session_id] = data.filename;
+                        
+                        // Enable chat if this is the first document
+                        if (Object.keys(uploadedDocs).length === 1) {
+                            enableChat();
+                            currentDocument = data.session_id;
+                        }
+                        
+                        // Clear file input
+                        fileInput.value = '';
+                        fileName.textContent = 'No file chosen';
+                    }
+                })
+                .catch(error => {
+                    uploadStatus.textContent = `Error: ${error.message}`;
+                });
+            });
+            
+            // Message form handler
+            messageForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const message = messageInput.value.trim();
+                if (!message) return;
+                
+                // Add user message to chat
+                addMessage(message, 'user');
+                
+                // Clear input
+                messageInput.value = '';
+                
+                // Show loading indicator
+                loadingIndicator.style.display = 'block';
+                
+                // Send message to server
+                socket.emit('message', {
+                    session_id: currentDocument,
+                    message: message
+                });
+            });
+            
+            // Socket connection handler
+            socket.on('connect', function() {
+                console.log('Connected to server');
+            });
+            
+            // Socket response handler
+            socket.on('response', function(data) {
+                // Hide loading indicator
+                loadingIndicator.style.display = 'none';
+                
+                // Add assistant message to chat
+                addMessage(data.message, 'assistant');
+            });
+            
+            // Helper function to add message to chat
+            function addMessage(text, sender) {
+                const messageDiv = document.createElement('div');
+                messageDiv.classList.add('message');
+                messageDiv.classList.add(sender === 'user' ? 'user-message' : 'assistant-message');
+                
+                // Handle markdown formatting (basic support)
+                if (sender === 'assistant') {
+                    // Convert **bold** text
+                    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                    
+                    // Convert *italic* text
+                    text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+                    
+                    // Convert bullet points
+                    text = text.replace(/^\s*-\s*(.*)/gm, '<li>$1</li>');
+                    text = text.replace(/<li>.*?<\/li>/gs, '<ul>$&</ul>');
+                    
+                    // Convert numbered lists
+                    text = text.replace(/^\s*(\d+)\.\s*(.*)/gm, '<li>$2</li>');
+                    text = text.replace(/(<li>.*?<\/li>)/gs, '<ol>$1</ol>');
+                    
+                    // Convert line breaks
+                    text = text.replace(/\n\n/g, '<br><br>');
+                    
+                    messageDiv.innerHTML = text;
+                } else {
+                    messageDiv.textContent = text;
+                }
+                
+                chatMessages.appendChild(messageDiv);
+                
+                // Scroll to bottom
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+            
+            // Helper function to add document to list
+            function addDocumentToList(filename, docSessionId) {
+                // Remove "no documents" message if present
+                if (noDocuments) {
+                    noDocuments.style.display = 'none';
+                }
+                
+                const docItem = document.createElement('div');
+                docItem.classList.add('document-item');
+                docItem.textContent = filename;
+                docItem.dataset.sessionId = docSessionId;
+                
+                // Add click handler to switch between documents
+                docItem.addEventListener('click', function() {
+                    // Set current document
+                    currentDocument = this.dataset.sessionId;
+                    
+                    // Highlight selected document
+                    document.querySelectorAll('.document-item').forEach(item => {
+                        item.style.backgroundColor = '#f1f1f1';
+                    });
+                    this.style.backgroundColor = '#c8e6c9';
+                    
+                    // Add system message about document switch
+                    addMessage(`Switched to document: ${filename}`, 'assistant');
+                });
+                
+                documentList.appendChild(docItem);
+                
+                // Highlight as selected if this is the first document
+                if (Object.keys(uploadedDocs).length === 1) {
+                    docItem.style.backgroundColor = '#c8e6c9';
+                }
+            }
+            
+            // Helper function to enable chat interface
+            function enableChat() {
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+                messageInput.placeholder = "Ask a question about the document...";
+            }
+        });
+    </script>
+</body>
+</html>
