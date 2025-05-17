@@ -1,4 +1,7 @@
 import os
+import eventlet
+eventlet.monkey_patch()
+
 import fitz  # PyMuPDF
 import docx
 from flask import Flask, render_template, request, jsonify
@@ -7,6 +10,8 @@ from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import uuid
 import json
+
+
 
 # For LLM integration
 from groq import Groq
@@ -20,7 +25,7 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
 
 # Initialize SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, async_mode='eventlet')
 
 # Load your Groq API key
 groq_api_key = os.getenv("GROQ_API_KEY")
@@ -371,6 +376,7 @@ def handle_message(data):
         print(f"Error generating response: {e}")
         emit('response', {'message': f"Sorry, I encountered an error: {str(e)}"})
 
-
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+    import os
+    port = int(os.environ.get("PORT", 10000))
+    socketio.run(app, host='0.0.0.0', port=port)
