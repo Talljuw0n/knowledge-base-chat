@@ -1,0 +1,8 @@
+Flask
+flask-socketio
+python-dotenv
+PyMuPDF
+python-docx
+groq
+eventlet
+gunicorn 
